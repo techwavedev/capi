@@ -1,9 +1,10 @@
 name: Build and Push to GHCR
 on:
   push:
-    branches: [ master ]
+    branches: [ master, beta, develop, 'release/*', 'feature/*' ]
+    tags: [ 'v*' ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, beta ]
 
 jobs:
   build:
@@ -28,7 +29,13 @@ jobs:
     
     - name: Set Release version env variable
       run: |
-        echo "RELEASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+        # Get version from Maven
+        MAVEN_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        echo "MAVEN_VERSION=${MAVEN_VERSION}" >> $GITHUB_ENV
+        
+        # Generate build metadata
+        echo "BUILD_DATE=$(date -u +'%Y%m%d')" >> $GITHUB_ENV
+        echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
     
     - name: Build with Maven
       run: mvn package -DskipTests --file pom.xml
@@ -43,22 +50,52 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
     
-    - name: Extract metadata
-      id: meta
+    - name: Generate Docker tags
+      id: docker_meta
       uses: docker/metadata-action@v4
       with:
-        images: ghcr.io/techwavedev/capi
+        images: ghcr.io/${{ github.repository_owner }}/capi
+        flavor: |
+          latest=false
         tags: |
-          type=raw,value=${{ env.RELEASE_VERSION }}
+          # For master branch - stable releases
           type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=stable,enable={{is_default_branch}}
+          type=raw,value=${{ env.MAVEN_VERSION }},enable={{is_default_branch}}
+          
+          # For beta branch - beta releases
+          type=raw,value=beta,enable=${{ github.ref == 'refs/heads/beta' }}
+          type=raw,value=${{ env.MAVEN_VERSION }}-beta,enable=${{ github.ref == 'refs/heads/beta' }}
+          type=raw,value=${{ env.MAVEN_VERSION }}-beta.${{ env.BUILD_DATE }},enable=${{ github.ref == 'refs/heads/beta' }}
+          
+          # For develop branch - development builds
+          type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+          type=raw,value=${{ env.MAVEN_VERSION }}-dev.${{ env.SHORT_SHA }},enable=${{ github.ref == 'refs/heads/develop' }}
+          
+          # For feature branches
+          type=ref,event=branch,prefix=feature-,enable=${{ startsWith(github.ref, 'refs/heads/feature/') }}
+          
+          # For release branches
+          type=ref,event=branch,prefix=rc-,enable=${{ startsWith(github.ref, 'refs/heads/release/') }}
+          
+          # For version tags
+          type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          
+          # For PRs
+          type=ref,event=pr,prefix=pr-
     
     - name: Build and push multi-platform image
       uses: docker/build-push-action@v4
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.docker_meta.outputs.tags }}
+        labels: ${{ steps.docker_meta.outputs.labels }}
         build-args: |
-          CAPI_VERSION=${{ env.RELEASE_VERSION }}
+          CAPI_VERSION=${{ env.MAVEN_VERSION }}
+          BUILD_DATE=${{ env.BUILD_DATE }}
+          VCS_REF=${{ env.SHORT_SHA }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
