@@ -70,18 +70,6 @@ public class CacheConfiguration {
         return consulKvStoreCache;
     }
 
-    @Bean
-    @ConditionalOnProperty(prefix = "capi.throttling", name = "enabled", havingValue = "true")
-    public Cache<String, ThrottleServiceObject> createLocalThrottleCache() {
-        log.debug("Creating Throttle Cache");
-        return new Cache2kBuilder<String, ThrottleServiceObject>(){}
-                .name("throttleServiceObject-" + hashCode())
-                .eternal(true)
-                .entryCapacity(10000)
-                .storeByReference(true)
-                .build();
-    }
-
     private List<String> consulKeyValueAsList(String encodedValue) {
         String decodedValue = new String(Base64.getDecoder().decode(encodedValue));
         return Arrays.asList(decodedValue.split(",", -1));

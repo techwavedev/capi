@@ -125,6 +125,11 @@
       <artifactId>camel-consul-starter</artifactId>
       <version>${org.apache.camel.springboot-version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.hazelcast</groupId>
+      <artifactId>hazelcast-spring</artifactId>
+      <version>5.3.5</version>
+    </dependency>
     <!-- Instrumentation -->
     <dependency>
       <groupId>org.apache.camel.springboot</groupId>
