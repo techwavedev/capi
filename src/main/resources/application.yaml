@@ -71,6 +71,7 @@ capi:
   throttling:
     enabled: false
   hazelcast:
+    enabled: true
     service-dns: hazelcast-service.default.svc.cluster.local
   public-endpoint: http://localhost:8380/capi/
   #### Kafka is still experimental ####
@@ -180,6 +181,8 @@ capi:
   opa:
     enabled: false
     endpoint: http://localhost:8181
+  circuitBreaker:
+    enabled: true
   # Time to live for Sticky Sessions feature
   sticky:
     session:
@@ -192,3 +195,11 @@ logging:
       hazelcast:
         system:
           logo: OFF
+resilience4j.circuitbreaker:
+  instances:
+    default:
+      slidingWindowType: COUNT_BASED
+      slidingWindowSize: 10
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10s
+      permittedNumberOfCallsInHalfOpenState: 5

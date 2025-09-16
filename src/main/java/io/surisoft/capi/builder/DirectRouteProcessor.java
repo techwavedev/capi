@@ -29,6 +29,8 @@ public class DirectRouteProcessor extends RouteBuilder {
     private Cache<String, Service> serviceCache;
     private final ContentTypeValidator contentTypeValidator;
     private final ThrottleProcessor throttleProcessor;
+    private boolean circuitBreakerEnabled;
+    private final InflightRequestProcessor inflightRequestProcessor;
 
     public DirectRouteProcessor(CamelContext camelContext,
                                 Service service,
@@ -38,7 +40,8 @@ public class DirectRouteProcessor extends RouteBuilder {
                                 String capiContext,
                                 String reverseProxyHost,
                                 ContentTypeValidator contentTypeValidator,
-                                ThrottleProcessor throttleProcessor) {
+                                ThrottleProcessor throttleProcessor,
+                                InflightRequestProcessor inflightRequestProcessor) {
         super(camelContext);
         this.service = service;
         this.routeUtils = routeUtils;
@@ -48,13 +51,15 @@ public class DirectRouteProcessor extends RouteBuilder {
         this.reverseProxyHost = reverseProxyHost;
         this.contentTypeValidator = contentTypeValidator;
         this.throttleProcessor = throttleProcessor;
+        this.inflightRequestProcessor = inflightRequestProcessor;
     }
 
     @Override
     public void configure() {
         log.trace("Trying to build and deploy route {}", routeId);
 
-        RouteDefinition routeDefinition = from(Constants.CAMEL_DIRECT + routeId);
+        RouteDefinition routeDefinition = from(Constants.CAMEL_DIRECT + routeId)
+                .process(inflightRequestProcessor);
         if(reverseProxyHost != null) {
             routeDefinition
                     .setHeader(Constants.X_FORWARDED_HOST, constant(reverseProxyHost));
@@ -90,11 +95,18 @@ public class DirectRouteProcessor extends RouteBuilder {
                         if(service.getServiceMeta().isThrottle() && throttleProcessor != null) {
                             throttleProcessor.process(exchange);
                         }
-                    })
+                    });
+            if(circuitBreakerEnabled) {
+                routeDefinition.circuitBreaker();
+            }
+            routeDefinition
                     .loadBalance()
                     .failover(1, false, service.isRoundRobinEnabled(), false)
-                    .to(routeUtils.buildEndpoints(service))
-                .endDoTry()
+                    .to(routeUtils.buildEndpoints(service));
+            if(circuitBreakerEnabled) {
+                routeDefinition.end();
+            }
+            routeDefinition.endDoTry()
                 .doCatch(SSLHandshakeException.class, SocketException.class, UnknownHostException.class, AuthorizationException.class)
                     .setHeader(Constants.ERROR_API_SHOW_TRACE_ID, constant(service.getServiceMeta().isB3TraceId()))
                     .process(routeUtils.getHttpErrorProcessor())
@@ -147,9 +159,15 @@ public class DirectRouteProcessor extends RouteBuilder {
                     if(service.getServiceMeta().isThrottle() && throttleProcessor != null) {
                         throttleProcessor.process(exchange);
                     }
-                })
-                .to(routeUtils.buildEndpoints(service))
-                .end()
+                });
+                if(circuitBreakerEnabled) {
+                    routeDefinition.circuitBreaker();
+                }
+                routeDefinition.to(routeUtils.buildEndpoints(service));
+                if(circuitBreakerEnabled) {
+                    routeDefinition.end();
+                }
+                routeDefinition.end()
                 .removeHeader(Constants.X_FORWARDED_HOST)
                 .removeHeader(Constants.X_FORWARDED_PREFIX)
                 .removeHeader(Constants.AUTHORIZATION_HEADER)
@@ -185,6 +203,10 @@ public class DirectRouteProcessor extends RouteBuilder {
 
     public void setServiceCache(Cache<String, Service> serviceCache) {
         this.serviceCache = serviceCache;
+    }
+
+    public void setCircuitBreakerEnabled(boolean circuitBreakerEnabled) {
+        this.circuitBreakerEnabled = circuitBreakerEnabled;
     }
 
     private RestDefinition getRestDefinition(Service service) {

@@ -1,6 +1,7 @@
 package io.surisoft.capi.configuration;
 
 import io.surisoft.capi.processor.ContentTypeValidator;
+import io.surisoft.capi.processor.InflightRequestProcessor;
 import io.surisoft.capi.processor.ThrottleProcessor;
 import io.surisoft.capi.processor.MetricsProcessor;
 import io.surisoft.capi.schema.SSEClient;
@@ -42,6 +43,8 @@ public class ConsulAutoConfiguration {
     private final ContentTypeValidator contentTypeValidator;
     private final Optional<ThrottleProcessor> globalThrottleProcessor;
     private final Optional<CapiSslContextHolder> capiSslContextHolder;
+    private final org.springframework.context.ApplicationContext applicationContext;
+    private final InflightRequestProcessor inflightRequestProcessor;
 
     public ConsulAutoConfiguration(@Value("${capi.consul.hosts}") List<String> capiConsulHosts,
                                    @Value("${capi.consul.token}") String consulToken,
@@ -58,7 +61,9 @@ public class ConsulAutoConfiguration {
                                    @Value("${capi.mode}") String capiRunningMode,
                                    ContentTypeValidator contentTypeValidator,
                                    Optional<ThrottleProcessor> globalThrottleProcessor,
-                                   Optional<CapiSslContextHolder> capiSslContextHolder) {
+                                   Optional<CapiSslContextHolder> capiSslContextHolder,
+                                   org.springframework.context.ApplicationContext applicationContext,
+                                   InflightRequestProcessor inflightRequestProcessor) {
         this.capiConsulHosts = capiConsulHosts;
         this.consulToken = consulToken;
         this.capiContext = capiContext;
@@ -75,6 +80,8 @@ public class ConsulAutoConfiguration {
         this.contentTypeValidator = contentTypeValidator;
         this.globalThrottleProcessor = globalThrottleProcessor;
         this.capiSslContextHolder = capiSslContextHolder;
+        this.applicationContext = applicationContext;
+        this.inflightRequestProcessor = inflightRequestProcessor;
     }
 
     @Bean(name = "consulNodeDiscovery")
@@ -86,7 +93,7 @@ public class ConsulAutoConfiguration {
                                                    HttpUtils httpUtils,
                                                    Cache<String, Service> serviceCache) {
 
-        ConsulNodeDiscovery consulNodeDiscovery = new ConsulNodeDiscovery(camelContext, serviceUtils, routeUtils, metricsProcessor, serviceCache, websocketClientMap, sseClientMap, contentTypeValidator, globalThrottleProcessor.orElse(null), capiSslContextHolder.orElse(null));
+        ConsulNodeDiscovery consulNodeDiscovery = new ConsulNodeDiscovery(camelContext, serviceUtils, routeUtils, metricsProcessor, serviceCache, websocketClientMap, sseClientMap, contentTypeValidator, globalThrottleProcessor.orElse(null), capiSslContextHolder.orElse(null), applicationContext, inflightRequestProcessor);
         consulNodeDiscovery.setHttpUtils(httpUtils);
 
         opaService.ifPresent(consulNodeDiscovery::setOpaService);

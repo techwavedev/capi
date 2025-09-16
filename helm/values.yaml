@@ -23,6 +23,13 @@ network:
 waf:
   arn: ""
 
+ingress:
+  provider: aws
+  className: alb
+  cloudflare:
+    enabled: false
+    tunnelName: capi-tunnel
+
 service:
   port: 8380
 
@@ -68,6 +75,8 @@ oauth2:
 opa:
   enabled: false
   endpoint:
+  circuitBreaker:
+    enabled: true
 
 logging:
   level:
@@ -110,11 +119,33 @@ securityContext: {}
 
 resources: {}
 
+probes:
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+  metrics:
+    - type: Pods
+      pods:
+        metricName: capi_inflight_requests
+        targetAverageValue: 10
+
+prometheus-adapter:
+  enabled: true
 
 nodeSelector: {}
 

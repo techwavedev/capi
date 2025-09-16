@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.surisoft.capi.builder.DirectRouteProcessor;
 import io.surisoft.capi.configuration.CapiSslContextHolder;
 import io.surisoft.capi.processor.ContentTypeValidator;
+import io.surisoft.capi.processor.InflightRequestProcessor;
 import io.surisoft.capi.processor.ThrottleProcessor;
 import io.surisoft.capi.processor.MetricsProcessor;
 import io.surisoft.capi.schema.*;
@@ -16,6 +17,7 @@ import org.cache2k.Cache;
 import org.cache2k.CacheEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.net.URI;
@@ -53,6 +55,11 @@ public class ConsulNodeDiscovery {
     private final ContentTypeValidator contentTypeValidator;
     private final ThrottleProcessor throttleProcessor;
     private final CapiSslContextHolder capiSslContextHolder;
+    private final org.springframework.context.ApplicationContext applicationContext;
+    private final InflightRequestProcessor inflightRequestProcessor;
+
+    @Value("${capi.circuitBreaker.enabled:false}")
+    private boolean circuitBreakerEnabled;
 
     public ConsulNodeDiscovery(CamelContext camelContext,
                                ServiceUtils serviceUtils,
@@ -63,7 +70,9 @@ public class ConsulNodeDiscovery {
                                Map<String, SSEClient> sseClientMap,
                                ContentTypeValidator contentTypeValidator,
                                ThrottleProcessor throttleProcessor,
-                               CapiSslContextHolder capiSslContextHolder) {
+                               CapiSslContextHolder capiSslContextHolder,
+                               org.springframework.context.ApplicationContext applicationContext,
+                               InflightRequestProcessor inflightRequestProcessor) {
         this.serviceUtils = serviceUtils;
         this.routeUtils = routeUtils;
         this.camelContext = camelContext;
@@ -74,6 +83,8 @@ public class ConsulNodeDiscovery {
         this.contentTypeValidator = contentTypeValidator;
         this.throttleProcessor = throttleProcessor;
         this.capiSslContextHolder = capiSslContextHolder;
+        this.applicationContext = applicationContext;
+        this.inflightRequestProcessor = inflightRequestProcessor;
 
         HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
         if(capiSslContextHolder != null) {
@@ -303,10 +314,11 @@ public class ConsulNodeDiscovery {
                     Route existingRoute = camelContext.getRoute(routeId);
                     if(existingRoute == null) {
                         try {
-                            DirectRouteProcessor directRouteProcessor = new DirectRouteProcessor(camelContext, incomingService, routeUtils, metricsProcessor, routeId, capiContext, reverseProxyHost, contentTypeValidator, throttleProcessor);
+                            DirectRouteProcessor directRouteProcessor = new DirectRouteProcessor(camelContext, incomingService, routeUtils, metricsProcessor, routeId, capiContext, reverseProxyHost, contentTypeValidator, throttleProcessor, inflightRequestProcessor);
                             directRouteProcessor.setHttpUtils(httpUtils);
                             directRouteProcessor.setOpaService(opaService);
                             directRouteProcessor.setServiceCache(serviceCache);
+                            directRouteProcessor.setCircuitBreakerEnabled(circuitBreakerEnabled);
                             camelContext.addRoutes(directRouteProcessor);
                         } catch (Exception e) {
                             log.error(e.getMessage(), e);
@@ -392,6 +404,10 @@ public class ConsulNodeDiscovery {
 
     public void setCapiRunningMode(String capiRunningMode) {
         this.capiRunningMode = capiRunningMode;
+    }
+
+    public void setCircuitBreakerEnabled(boolean circuitBreakerEnabled) {
+        this.circuitBreakerEnabled = circuitBreakerEnabled;
     }
 
     public void reloadHttpClient() {

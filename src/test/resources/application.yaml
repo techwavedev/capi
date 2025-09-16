@@ -187,3 +187,5 @@ capi:
       time:
         to:
           live: 2
+  hazelcast:
+    uris: localhost:5701

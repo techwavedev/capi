@@ -36,8 +36,8 @@ public class ThrottleProcessor implements Processor {
     private final CapiInstance capiInstance;
 
     public ThrottleProcessor(org.cache2k.Cache<String, Service> serviceCache,
-                             HttpUtils httpUtils, Map<String,
-                             ThrottleServiceObject> throttleServiceObjectCache,
+                             HttpUtils httpUtils,
+                             Map<String, ThrottleServiceObject> throttleServiceObjectCache,
                              KafkaTemplate<String, CapiEvent> kafkaTemplate,
                              @Value("${capi.kafka.topic}") String capiKafkaTopic,
                              CapiInstance capiInstance) {
@@ -87,34 +87,41 @@ public class ThrottleProcessor implements Processor {
 
     public boolean canContinue(Exchange exchange, Service service, String consumerKey, boolean consumerThrottle, long totalCallsAllowed, long expirationDuration) {
         String cacheKey = consumerThrottle ? service.getId() + ":" + consumerKey : service.getId();
-        ThrottleServiceObject throttleServiceObject = throttleServiceObjectCache.get(cacheKey);
 
-        if(!consumerThrottle) {
-            totalCallsAllowed = service.getServiceMeta().getThrottleTotalCalls();
-            expirationDuration = service.getServiceMeta().getThrottleDuration();
+        // Lock the key to prevent race conditions in a distributed environment
+        ((com.hazelcast.map.IMap<String, ThrottleServiceObject>) throttleServiceObjectCache).lock(cacheKey);
+        try {
+            ThrottleServiceObject throttleServiceObject = throttleServiceObjectCache.get(cacheKey);
+
+            if(!consumerThrottle) {
+                totalCallsAllowed = service.getServiceMeta().getThrottleTotalCalls();
+                expirationDuration = service.getServiceMeta().getThrottleDuration();
+            }
+
+            if (throttleServiceObject == null || throttleServiceObject.isExpired()) {
+                throttleServiceObject = new ThrottleServiceObject(cacheKey, consumerThrottle ? consumerKey : null, totalCallsAllowed, expirationDuration);
+                throttleServiceObjectCache.put(cacheKey, throttleServiceObject);
+                sendToKafka(throttleServiceObject);
+
+                exchange.setProperty(Constants.CAPI_META_THROTTLE_CURRENT_CALL_NUMBER, throttleServiceObject.getCurrentCalls());
+
+                return true;
+            }
+
+            if (throttleServiceObject.canCall()) {
+                throttleServiceObject.increment();
+                throttleServiceObjectCache.put(cacheKey, throttleServiceObject);
+                sendToKafka(throttleServiceObject);
+
+                exchange.setProperty(Constants.CAPI_META_THROTTLE_CURRENT_CALL_NUMBER, throttleServiceObject.getCurrentCalls());
+
+                return true;
+            }
+
+            return false;
+        } finally {
+            ((com.hazelcast.map.IMap<String, ThrottleServiceObject>) throttleServiceObjectCache).unlock(cacheKey);
         }
-
-        if (throttleServiceObject == null || throttleServiceObject.isExpired()) {
-            throttleServiceObject = new ThrottleServiceObject(cacheKey, consumerThrottle ? consumerKey : null, totalCallsAllowed, expirationDuration);
-            throttleServiceObjectCache.put(cacheKey, throttleServiceObject);
-            sendToKafka(throttleServiceObject);
-
-            exchange.setProperty(Constants.CAPI_META_THROTTLE_CURRENT_CALL_NUMBER, throttleServiceObject.getCurrentCalls());
-
-            return true;
-        }
-
-        if (throttleServiceObject.canCall()) {
-            throttleServiceObject.increment();
-            throttleServiceObjectCache.put(cacheKey, throttleServiceObject);
-            sendToKafka(throttleServiceObject);
-
-            exchange.setProperty(Constants.CAPI_META_THROTTLE_CURRENT_CALL_NUMBER, throttleServiceObject.getCurrentCalls());
-
-            return true;
-        }
-
-        return false;
     }
 
     private void sendToKafka(ThrottleServiceObject throttleServiceObject) {

@@ -3,6 +3,7 @@ package io.surisoft.capi.controller;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import io.surisoft.capi.processor.ContentTypeValidator;
+import io.surisoft.capi.processor.InflightRequestProcessor;
 import io.surisoft.capi.processor.MetricsProcessor;
 import io.surisoft.capi.schema.SSEClient;
 import io.surisoft.capi.schema.Service;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
@@ -96,6 +99,12 @@ class TestConsulNodeDiscovery {
     @Autowired(required = false)
     Map<String, SSEClient> sseClientMap;
 
+    @Autowired
+    ApplicationContext applicationContext;
+
+    @Autowired
+    private InflightRequestProcessor inflightRequestProcessor;
+
     WireMockServer wireMockServer;
 
     @Test
@@ -111,7 +120,7 @@ class TestConsulNodeDiscovery {
         Assertions.assertNotNull(metricsProcessor);
         Assertions.assertNotNull(serviceCache);
 
-        ConsulNodeDiscovery consulNodeDiscovery = new ConsulNodeDiscovery(camelContext, serviceUtils, routeUtils, metricsProcessor, serviceCache, websocketClientMap, sseClientMap, contentTypeValidator, null, null);
+        ConsulNodeDiscovery consulNodeDiscovery = new ConsulNodeDiscovery(camelContext, serviceUtils, routeUtils, metricsProcessor, serviceCache, websocketClientMap, sseClientMap, contentTypeValidator, null, null, applicationContext, inflightRequestProcessor);
         consulNodeDiscovery.setOpaService(opaService);
         consulNodeDiscovery.setHttpUtils(httpUtils);
         consulNodeDiscovery.setConsulHostList(List.of("http://localhost:" + wireMockServer.port()));

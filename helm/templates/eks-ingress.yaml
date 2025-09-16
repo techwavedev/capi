@@ -7,6 +7,7 @@ metadata:
     service: {{ .Values.capi.name }}
   name: {{ .Values.capi.name }}
   annotations:
+    {{ if eq .Values.ingress.provider "aws" }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ssl.certificate}}
     alb.ingress.kubernetes.io/subnets: {{ .Values.network.subnet }}
     alb.ingress.kubernetes.io/security-groups: {{ .Values.network.security.group }}
@@ -21,8 +22,12 @@ metadata:
     {{ if .Values.waf.arn }}
     alb.ingress.kubernetes.io/wafv2-acl-arn: {{ .Values.waf.arn }}
     {{ end }}
+    {{ else if eq .Values.ingress.provider "cloudflare" }}
+    kubernetes.io/ingress.class: "cloudflare-tunnel"
+    cloudflare-tunnel-name: {{ .Values.ingress.cloudflare.tunnelName }}
+    {{ end }}
 spec:
-  ingressClassName: alb
+  ingressClassName: {{ .Values.ingress.className }}
   tls:
     - hosts:
       - {{ .Values.network.host }}
