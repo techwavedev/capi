@@ -70,6 +70,8 @@ capi:
   mode: full
   throttling:
     enabled: false
+  hazelcast:
+    service-dns: hazelcast-service.default.svc.cluster.local
   public-endpoint: http://localhost:8380/capi/
   #### Kafka is still experimental ####
   kafka:

@@ -35,6 +35,8 @@ spec:
           value: {{ quote .Values.capi.consul.discovery.timer.interval }}
         - name: capi.consul.hosts
           value: {{ quote .Values.capi.consul.hosts }}
+        - name: capi.hazelcast.service-dns
+          value: {{ .Values.capi.hazelcast.serviceDns }}
         ## Trust Store Configuration      
         - name: capi.trust.store.enabled
           value: {{ quote .Values.capi.trust.store.enabled }}

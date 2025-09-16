@@ -11,7 +11,6 @@ import io.surisoft.capi.utils.Constants;
 import io.surisoft.capi.utils.HttpUtils;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.cache2k.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -27,16 +27,16 @@ import java.util.UUID;
 public class ThrottleProcessor implements Processor {
 
     private static final Logger log = LoggerFactory.getLogger(ThrottleProcessor.class);
-    private final Cache<String, Service> serviceCache;
+    private final org.cache2k.Cache<String, Service> serviceCache;
     private final HttpUtils httpUtils;
 
-    private final Cache<String, ThrottleServiceObject> throttleServiceObjectCache;
+    private final Map<String, ThrottleServiceObject> throttleServiceObjectCache;
     private final KafkaTemplate<String, CapiEvent> kafkaTemplate;
     private final String capiKafkaTopic;
     private final CapiInstance capiInstance;
 
-    public ThrottleProcessor(Cache<String, Service> serviceCache,
-                             HttpUtils httpUtils, Cache<String,
+    public ThrottleProcessor(org.cache2k.Cache<String, Service> serviceCache,
+                             HttpUtils httpUtils, Map<String,
                              ThrottleServiceObject> throttleServiceObjectCache,
                              KafkaTemplate<String, CapiEvent> kafkaTemplate,
                              @Value("${capi.kafka.topic}") String capiKafkaTopic,

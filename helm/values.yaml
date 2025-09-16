@@ -20,6 +20,9 @@ network:
   target:
     ip:
 
+waf:
+  arn: ""
+
 service:
   port: 8380
 
@@ -36,6 +39,8 @@ capi:
   namespace: capi-default
   throttling:
     enabled: true
+  hazelcast:
+    serviceDns: hazelcast-service.capi-default.svc.cluster.local
   metrics:
     host: capi-metrics.capi-default.svc.cluster.local
   context:
